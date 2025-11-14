@@ -97,7 +97,6 @@ If you want, I can:
 
 This entry is appended to preserve the full history of AI-assisted edits. I will not modify earlier entries  only append new ones as requested.
 
----
 
 ### 2025-11-14  AI Append: docs reorganization & cleanup (preserve history)
 
@@ -116,4 +115,15 @@ This entry is appended to preserve the full history of AI-assisted edits. I will
   - I did not delete the file without explicit confirmation. If you want it removed I can delete the file from disk and/or run `git rm` and commit the removal.
 
 This entry is appended to preserve the full history of AI-assisted edits. I will not modify earlier entries  only append new ones as requested.
+
+---
+
+### 2025-11-14  AI Append: moved docker files, removed compose version, and commit
+
+- Removed top-level `version` key from `docker-compose.yml` to silence the compose deprecation warning.
+- Created `docker/` and moved `Dockerfile`, `entrypoint.js`, and `init.sql` into it; updated `docker-compose.yml` to use `./docker/init.sql` and `build: ./docker`.
+- Removed root copies of the moved files.
+- Validated `docker-compose` config; services reported: `postgres`, `n8n`.
+- Appended this entry to `docs/AI_ASSISTED_DEVELOPMENT.md` and committed changes locally. The branch is ahead of `origin/main` by one commit; run `git push origin main` to publish.
+
 
