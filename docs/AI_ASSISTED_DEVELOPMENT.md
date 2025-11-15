@@ -1,3 +1,65 @@
+**Overview**
+- **Purpose**: Concise record of changes made to enable automatic n8n workflow import, the rationale, and how to operate and troubleshoot the importer.
+- **Scope**: Node-based entrypoint importer, Docker artifacts moved to `docker/`, `.env` centralization, modular workflows added while preserving the monolith.
+
+**Files Changed**
+- **`docker/entrypoint.js`**: Canonical NodeJS entrypoint that spawns n8n, waits for the API to be ready, attempts REST updates, falls back to the `n8n` CLI import, and watches `~/.n8n/workflows` for JSON changes to re-import.
+- **`docker/Dockerfile`**: Updated to `COPY entrypoint.js /usr/local/bin/entrypoint.js` and set the container ENTRYPOINT to run the Node script.
+- **`workflows/`**: Added modular workflow JSONs (`01-telegram-ingest.json`, `02-process-message.json`, `03-generate-and-reply.json`) and preserved `telegram-multi-agent-bot.json` (the original monolithic workflow).
+- **`.env` / `.env.example`**: Centralized environment variables including `N8N_BASIC_AUTH_*`, `POSTGRES_*`, `GEMINI_*`, `DEEPSEEK_*`, `LLM_PROVIDER`, `LLM_MODEL`, and runtime vars like `N8N_RUNNERS_ENABLED`, `TZ`.
+- **`docs/AI_ASSISTED_DEVELOPMENT.md`**: This file — step-by-step notes and instructions.
+
+**Entrypoint Behavior**
+- **Start**: The entrypoint spawns the upstream `n8n` process and forwards signals.
+- **Wait-for-ready**: Polls `GET /rest/workflows` until the API responds. The script pragmatically treats an HTTP `200` or `401` as "ready" because the REST endpoint sometimes returns `401` inside the container even when Basic Auth envs are present.
+- **Import Strategy**:
+  - For each `*.json` file in `~/.n8n/workflows`, the script first attempts a REST `PUT` update by workflow name.
+  - If REST update fails (or is unavailable due to auth), the script falls back to the CLI: `n8n import:workflow --input <file>`.
+  - The importer is deliberately import-only: it does not automatically activate workflows. Activation is left to the user or an explicit process.
+- **Watcher**: A debounced `fs.watch` monitors the workflows directory and re-runs the import pass on changes.
+
+**Why Node Entrypoint?**
+- The official n8n image lacks a usable shell for a simple shell entrypoint that can orchestrate REST probes + CLI fallback reliably. A small Node script inside the container provides precise control and better cross-platform behavior inside Docker.
+
+**How to Build & Run**
+- Build the custom image (from project root):
+  - ``docker-compose -f .\docker-compose.yml build n8n``
+- Start or restart the service:
+  - ``docker-compose -f .\docker-compose.yml up -d n8n``
+- View logs (to watch importer actions):
+  - ``docker-compose -f .\docker-compose.yml logs --tail 200 n8n``
+
+**How to Add or Update Workflows**
+- Place or edit JSON files in the repository `workflows/` (they are copied into the container at runtime via volume). The entrypoint's watcher will detect changes and re-import automatically.
+- The importer will not auto-activate workflows. To activate a workflow manually:
+  - Use the n8n Editor UI to toggle activation.
+  - Or use the REST API with appropriate credentials to patch `workflow.active` to `true` for the target workflow id.
+
+**Troubleshooting Notes**
+- REST `401` inside container: Observed behavior where `GET /rest/workflows` returned `401` despite Basic Auth envs being set. The entrypoint treats `401` as "ready" and uses CLI fallback.
+- If CLI imports succeed but workflows appear inactive: this is expected. Activation is explicit and intentionally omitted to avoid surprising runtime behavior.
+- If the watcher doesn't pick changes: confirm the workflows directory is correctly mounted and that JSON files have `.json` extension (no `.imported_*` marker files are used).
+
+**Operation Checklist**
+- Ensure `.env` contains correct values and secrets.
+- Build image: ``docker-compose -f .\docker-compose.yml build n8n``
+- Start container: ``docker-compose -f .\docker-compose.yml up -d n8n``
+- Check logs and verify messages like `Successfully imported 1 workflow.` and `File watcher established`.
+
+**Notes & Rationale**
+- Idempotency: The importer is idempotent at import time (it will re-import files repeatedly). This is simpler and safer than touching the database to toggle activation, and it preserves the user's stated preference to keep the monolith and modular workflows without silent overwrites.
+- Activation is intentionally manual to avoid accidental live behavior changes during automated deployments.
+
+**Next Steps (optional)**
+- If you want automatic activation, we can add an explicit opt-in step that either:
+  - Uses the REST API with a reliable auth path to activate workflows after import, or
+  - Uses a DB migration (Postgres) to toggle `workflow_entity.active` (more invasive — use with caution).
+
+**Contact**
+- For follow-ups, mention this file and the `docker/entrypoint.js` script when asking about importer behavior or making further changes.
+
+---
+Generated by the AI-assisted development session that implemented the importer and workflow modularization.
 **AI-Assisted Development Log**
 
 This file documents the changes made during an AI-assisted editing session. It is intended as a concise record for maintainers and auditors. Sensitive values (API keys, tokens, passwords) are not included here — they remain in the local `./.env` and should not be committed.
